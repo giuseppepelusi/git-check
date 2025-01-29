@@ -29,5 +29,5 @@ uninstall:
 	sudo rm -f $(INSTALL_PATH)/$(NAME)
 	echo "$(RED)•$(RESET) Uninstalled \033[1;32m$(NAME)$(RESET) from $(BLUE)$(INSTALL_PATH)$(RESET)"
 
-.PHONY: all compile clean install uninstall setup
-.SILENT: all compile clean install uninstall setup
+.PHONY: all compile clean install uninstall
+.SILENT: all compile clean install uninstall
