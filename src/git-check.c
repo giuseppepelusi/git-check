@@ -6,6 +6,7 @@
 #include <pwd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #define GREEN "\033[32m"
 #define RED "\033[31m"
@@ -14,8 +15,9 @@
 #define BOLD "\033[1m"
 #define RESET "\033[0m"
 
+void* loading_animation(void* arg);
 void print_help(const char *program_name);
-char* run_command(const char* command);
+char* run_command(const char* command, const char* loading_message);
 char* get_home_directory();
 char* get_current_branch();
 int check_uncommitted_changes();
@@ -26,6 +28,8 @@ char* replace_home_with_tilde(const char* path, const char* home_dir);
 void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
 void scan_directories(const char *base_path, int show_branch, int show_path);
+
+volatile int loading_done = 0;
 
 int main(int argc, char *argv[])
 {
@@ -72,9 +76,33 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (is_git_repository(directory))
+    {
+        display_git_status(directory, show_branch, show_path);
+    }
+
     scan_directories(directory, show_branch, show_path);
 
     return 0;
+}
+
+void* loading_animation(void* arg)
+{
+    const char *message = (const char*)arg;
+    const char *animation_chars = "|/-\\";
+    int animation_length = 4;
+    int i = 0;
+
+    while (!loading_done)
+    {
+        printf("\r%s %c", message, animation_chars[i]);
+        fflush(stdout);
+        usleep(100000);
+
+        i = (i + 1) % animation_length;
+    }
+
+    return NULL;
 }
 
 void print_help(const char *program_name)
@@ -86,8 +114,17 @@ void print_help(const char *program_name)
     fprintf(stderr, "  help          Show this help message\n");
 }
 
-char* run_command(const char* command)
+char* run_command(const char* command, const char* loading_message)
 {
+    pthread_t animation_thread;
+    loading_done = 0;
+
+    if (pthread_create(&animation_thread, NULL, loading_animation, (void*)loading_message) != 0)
+    {
+        perror("Failed to create animation thread");
+        return NULL;
+    }
+
     char* result = malloc(1024);
     FILE* file_pointer;
     if ((file_pointer = popen(command, "r")) == NULL)
@@ -102,6 +139,22 @@ char* run_command(const char* command)
     }
 
     pclose(file_pointer);
+
+    loading_done = 1;
+
+    if (pthread_join(animation_thread, NULL) != 0)
+    {
+        perror("Failed to join animation thread");
+        return NULL;
+    }
+
+    printf("\r%s\r", loading_message);
+    for (int i = 0; i < strlen(loading_message) + 2; i++)
+    {
+        printf(" ");
+    }
+    printf("\r");
+
     return result;
 }
 
@@ -118,14 +171,14 @@ char *get_home_directory()
 
 char* get_current_branch()
 {
-    char* current_branch = run_command("git rev-parse --abbrev-ref HEAD");
+    char* current_branch = run_command("git rev-parse --abbrev-ref HEAD", "Getting current branch...");
     current_branch[strcspn(current_branch, "\n")] = '\0';
     return current_branch;
 }
 
 int check_uncommitted_changes()
 {
-    char* has_uncommitted_changes = run_command("git status --porcelain");
+    char* has_uncommitted_changes = run_command("git status --porcelain", "Checking for uncommitted changes...");
     int result = strlen(has_uncommitted_changes) > 0;
     free(has_uncommitted_changes);
     return result;
@@ -135,7 +188,7 @@ int check_unpushed_commits(const char* branch)
 {
     char command[1024];
     snprintf(command, sizeof(command), "git log origin/%s..HEAD", branch);
-    char* has_unpushed_commits = run_command(command);
+    char* has_unpushed_commits = run_command(command, "Checking for unpushed commits...");
     int result = strlen(has_unpushed_commits) > 0;
     free(has_unpushed_commits);
     return result;
@@ -143,10 +196,10 @@ int check_unpushed_commits(const char* branch)
 
 int check_changes_to_pull(const char* branch)
 {
-    run_command("git fetch");
+    run_command("git fetch", "Fetching changes from remote repository...");
     char command[1024];
     snprintf(command, sizeof(command), "git log HEAD..origin/%s", branch);
-    char* has_changes_to_pull = run_command(command);
+    char* has_changes_to_pull = run_command(command, "Checking for changes to pull...");
     int result = strlen(has_changes_to_pull) > 0;
     free(has_changes_to_pull);
     return result;
@@ -156,7 +209,7 @@ int check_remote_branch_exists(const char* branch)
 {
     char command[1024];
     snprintf(command, sizeof(command), "git ls-remote --heads origin %s", branch);
-    char* result = run_command(command);
+    char* result = run_command(command, "Checking if remote branch exists...");
     int exists = strlen(result) > 0;
     free(result);
     return exists;
