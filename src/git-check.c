@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 #include <pwd.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -9,9 +10,11 @@
 #define GREEN "\033[32m"
 #define RED "\033[31m"
 #define YELLOW "\033[33m"
+#define BLUE "\033[34m"
 #define BOLD "\033[1m"
 #define RESET "\033[0m"
 
+void print_help(const char *program_name);
 char* run_command(const char* command);
 char* get_home_directory();
 char* get_current_branch();
@@ -19,22 +22,68 @@ int check_uncommitted_changes();
 int check_unpushed_commits(const char* branch);
 int check_changes_to_pull(const char* branch);
 int check_remote_branch_exists(const char* branch);
-void display_git_status(const char* path);
+char* replace_home_with_tilde(const char* path, const char* home_dir);
+void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
-void scan_directories(const char *base_path);
+void scan_directories(const char *base_path, int show_branch, int show_path);
 
-int main()
+int main(int argc, char *argv[])
 {
-    char* home_dir = get_home_directory();
-    if (home_dir == NULL)
+	if (argc > 1 && strcmp(argv[1], "help") == 0)
+    {
+        print_help(argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+
+    int opt;
+    int show_branch = 0;
+    int show_path = 0;
+    char *directory = get_home_directory();
+    if (directory == NULL)
     {
         fprintf(stderr, "Failed to get home directory\n");
         return EXIT_FAILURE;
     }
 
-    scan_directories(home_dir);
+    while ((opt = getopt(argc, argv, "bpd:")) != -1)
+    {
+        switch (opt)
+        {
+            case 'b':
+                show_branch = 1;
+                break;
+            case 'p':
+                show_path = 1;
+                break;
+            case 'd':
+            	{
+                    char resolved_path[PATH_MAX];
+                    if (realpath(optarg, resolved_path) == NULL)
+                    {
+                        perror("git-check");
+                        return EXIT_FAILURE;
+                    }
+                    directory = strdup(resolved_path);
+                }
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [-b] [-p] [-d directory]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    scan_directories(directory, show_branch, show_path);
 
     return 0;
+}
+
+void print_help(const char *program_name)
+{
+    fprintf(stderr, "Usage: %s [-b] [-p] [-d directory]\n", program_name);
+    fprintf(stderr, "  -b            Show branches\n");
+    fprintf(stderr, "  -p            Show path instead of directory name\n");
+    fprintf(stderr, "  -d directory  Specify directory to scan\n");
+    fprintf(stderr, "  help          Show this help message\n");
 }
 
 char* run_command(const char* command)
@@ -113,7 +162,22 @@ int check_remote_branch_exists(const char* branch)
     return exists;
 }
 
-void display_git_status(const char* path)
+char* replace_home_with_tilde(const char* path, const char* home_dir)
+{
+    if (strncmp(path, home_dir, strlen(home_dir)) == 0)
+    {
+        size_t new_path_len = strlen(path) - strlen(home_dir) + 2;
+        char* new_path = malloc(new_path_len);
+        snprintf(new_path, new_path_len, "~%s", path + strlen(home_dir));
+        return new_path;
+    }
+    else
+    {
+        return strdup(path);
+    }
+}
+
+void display_git_status(const char* path, int show_branch, int show_path)
 {
     char* cwd = strdup(path);
     char* folder_name = strrchr(cwd, '/') + 1;
@@ -125,6 +189,7 @@ void display_git_status(const char* path)
 
     int has_uncommitted_changes = check_uncommitted_changes();
     char* current_branch = get_current_branch();
+    char* path_with_tilde = replace_home_with_tilde(path, get_home_directory());
 
     int has_unpushed_commits = 0;
     int has_changes_to_pull = 0;
@@ -137,8 +202,11 @@ void display_git_status(const char* path)
 
     chdir(original_cwd);
 
-    printf("%s%s%s: ", BOLD, folder_name, RESET);
-    printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
+    printf("%s%s%s: ", BOLD, show_path ? path_with_tilde : folder_name, RESET);
+    if (show_branch)
+    {
+        printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
+    }
     printf("[%s%s%s] ", has_uncommitted_changes ? RED BOLD "Changes" : GREEN BOLD "No Changes", RESET, RESET);
     printf("[%s%s%s] ", has_unpushed_commits ? RED BOLD "Unpushed" : GREEN BOLD "Pushed", RESET, RESET);
     printf("[%s%s%s]\n", has_changes_to_pull ? RED BOLD "Pull" : GREEN BOLD "Up-to-date", RESET, RESET);
@@ -160,7 +228,7 @@ int is_git_repository(const char *path)
     return 0;
 }
 
-void scan_directories(const char *base_path)
+void scan_directories(const char *base_path, int show_branch, int show_path)
 {
     DIR *dir;
     struct dirent *entry;
@@ -185,10 +253,10 @@ void scan_directories(const char *base_path)
 
             if (is_git_repository(path))
             {
-            	display_git_status(path);
+                display_git_status(path, show_branch, show_path);
             }
 
-            scan_directories(path);
+            scan_directories(path, show_branch, show_path);
         }
     }
 
