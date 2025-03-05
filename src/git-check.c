@@ -11,7 +11,6 @@
 #define GREEN "\033[32m"
 #define RED "\033[31m"
 #define YELLOW "\033[33m"
-#define BLUE "\033[34m"
 #define BOLD "\033[1m"
 #define RESET "\033[0m"
 
@@ -203,7 +202,7 @@ int check_unpushed_commits(const char* branch)
 
 int check_changes_to_pull(const char* branch)
 {
-    run_command("git fetch", "Fetching changes from remote repository...");
+    run_command("git fetch > /dev/null 2>&1", "Fetching changes from remote repository...");
     char command[1024];
     snprintf(command, sizeof(command), "git log HEAD..origin/%s", branch);
     char* has_changes_to_pull = run_command(command, "Checking for changes to pull...");
