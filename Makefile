@@ -12,12 +12,12 @@ BLUE = \033[1;34m
 
 all: install
 
-compile: clean
+compile: clear
 	mkdir -p bin
-	gcc $(SRC) -o $(EXEC)
+	$(CC) $(SRC) -o $(EXEC)
 	echo "$(YELLOW)•$(RESET) Compiled"
 
-clean:
+clear:
 	rm -rf bin
 	echo "$(YELLOW)•$(RESET) Removed executable and objects"
 
@@ -29,5 +29,5 @@ uninstall:
 	sudo rm -f $(INSTALL_PATH)/$(NAME)
 	echo "$(RED)•$(RESET) Uninstalled \033[1;32m$(NAME)$(RESET) from $(BLUE)$(INSTALL_PATH)$(RESET)"
 
-.PHONY: all compile clean install uninstall
-.SILENT: all compile clean install uninstall
+.PHONY: all compile clear install uninstall
+.SILENT: all compile clear install uninstall
