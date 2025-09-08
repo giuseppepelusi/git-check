@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
                 }
                 break;
             default:
-                fprintf(stderr, "Usage: %s [-b] [-p] [-d directory]\n", argv[0]);
+                print_help(argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
     if (optind < argc)
     {
         fprintf(stderr, "git-check: unexpected argument: '%s'\n", argv[optind]);
-        fprintf(stderr, "Usage: %s [-b] [-p] [-d directory]\n", argv[0]);
+        print_help(argv[0]);
         exit(EXIT_FAILURE);
     }
 
