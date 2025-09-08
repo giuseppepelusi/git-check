@@ -41,10 +41,10 @@ int main(int argc, char *argv[])
     int opt;
     int show_branch = 0;
     int show_path = 0;
-    char *directory = get_home_directory();
+    char *directory = getcwd(NULL, 0);
     if (directory == NULL)
     {
-        fprintf(stderr, "Failed to get home directory\n");
+        fprintf(stderr, "Failed to get current directory\n");
         return EXIT_FAILURE;
     }
 
