@@ -23,12 +23,14 @@ int check_uncommitted_changes();
 int check_unpushed_commits(const char* branch);
 int check_changes_to_pull(const char* branch);
 int check_remote_branch_exists(const char* branch);
+int check_internet();
 char* replace_home_with_tilde(const char* path, const char* home_dir);
 void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
 void scan_directories(const char *base_path, int show_branch, int show_path);
 
 volatile int loading_done = 0;
+static int internet_status = -1; // -1 = not checked, 0 = no internet, 1 = has internet
 
 int main(int argc, char *argv[])
 {
@@ -132,11 +134,22 @@ char* run_command(const char* command, const char* loading_message)
     }
 
     char* result = malloc(1024);
+    if (result == NULL)
+    {
+        perror("malloc");
+        loading_done = 1;
+        pthread_join(animation_thread, NULL);
+        return NULL;
+    }
+
     FILE* file_pointer;
     if ((file_pointer = popen(command, "r")) == NULL)
     {
         perror("popen");
-        exit(EXIT_FAILURE);
+        free(result);
+        loading_done = 1;
+        pthread_join(animation_thread, NULL);
+        return NULL;
     }
 
     if (fgets(result, 1024, file_pointer) == NULL)
@@ -151,6 +164,7 @@ char* run_command(const char* command, const char* loading_message)
     if (pthread_join(animation_thread, NULL) != 0)
     {
         perror("Failed to join animation thread");
+        free(result);
         return NULL;
     }
 
@@ -177,14 +191,14 @@ char *get_home_directory()
 
 char* get_current_branch()
 {
-    char* current_branch = run_command("git rev-parse --abbrev-ref HEAD", "Getting current branch...");
+    char* current_branch = run_command("git rev-parse --abbrev-ref HEAD 2>/dev/null", "Getting current branch...");
     current_branch[strcspn(current_branch, "\n")] = '\0';
     return current_branch;
 }
 
 int check_uncommitted_changes()
 {
-    char* has_uncommitted_changes = run_command("git status --porcelain", "Checking for uncommitted changes...");
+    char* has_uncommitted_changes = run_command("git status --porcelain 2>/dev/null", "Checking for uncommitted changes...");
     int result = strlen(has_uncommitted_changes) > 0;
     free(has_uncommitted_changes);
     return result;
@@ -193,7 +207,7 @@ int check_uncommitted_changes()
 int check_unpushed_commits(const char* branch)
 {
     char command[1024];
-    snprintf(command, sizeof(command), "git log origin/%s..HEAD", branch);
+    snprintf(command, sizeof(command), "git log origin/%s..HEAD 2>/dev/null", branch);
     char* has_unpushed_commits = run_command(command, "Checking for unpushed commits...");
     int result = strlen(has_unpushed_commits) > 0;
     free(has_unpushed_commits);
@@ -204,7 +218,7 @@ int check_changes_to_pull(const char* branch)
 {
     run_command("git fetch > /dev/null 2>&1", "Fetching changes from remote repository...");
     char command[1024];
-    snprintf(command, sizeof(command), "git log HEAD..origin/%s", branch);
+    snprintf(command, sizeof(command), "git log HEAD..origin/%s 2>/dev/null", branch);
     char* has_changes_to_pull = run_command(command, "Checking for changes to pull...");
     int result = strlen(has_changes_to_pull) > 0;
     free(has_changes_to_pull);
@@ -214,11 +228,30 @@ int check_changes_to_pull(const char* branch)
 int check_remote_branch_exists(const char* branch)
 {
     char command[1024];
-    snprintf(command, sizeof(command), "git ls-remote --heads origin %s", branch);
+    snprintf(command, sizeof(command), "git ls-remote --heads origin %s > /dev/null 2>&1; echo $?", branch);
     char* result = run_command(command, "Checking if remote branch exists...");
-    int exists = strlen(result) > 0;
+    int exit_code = atoi(result);
     free(result);
-    return exists;
+    return exit_code == 0;
+}
+
+int check_internet()
+{
+    if (internet_status == -1)
+    {
+        char* result = run_command("git ls-remote origin -q > /dev/null 2>&1; echo $?", "Checking internet connection...");
+        if (result == NULL)
+        {
+            internet_status = 0;
+        }
+        else
+        {
+            int exit_code = atoi(result);
+            free(result);
+            internet_status = (exit_code == 0) ? 1 : 0;
+        }
+    }
+    return internet_status;
 }
 
 char* replace_home_with_tilde(const char* path, const char* home_dir)
@@ -246,16 +279,15 @@ void display_git_status(const char* path, int show_branch, int show_path)
 
     chdir(path);
 
-    int has_uncommitted_changes = check_uncommitted_changes();
     char* current_branch = get_current_branch();
+    int has_uncommitted_changes = check_uncommitted_changes();
+    int has_unpushed_commits = check_unpushed_commits(current_branch);
     char* path_with_tilde = replace_home_with_tilde(path, get_home_directory());
-
-    int has_unpushed_commits = 0;
+    int has_internet = check_internet();
     int has_changes_to_pull = 0;
 
-    if (check_remote_branch_exists(current_branch))
+    if (has_internet && check_remote_branch_exists(current_branch))
     {
-        has_unpushed_commits = check_unpushed_commits(current_branch);
         has_changes_to_pull = check_changes_to_pull(current_branch);
     }
 
@@ -268,10 +300,14 @@ void display_git_status(const char* path, int show_branch, int show_path)
     }
     printf("[%s%s%s] ", has_uncommitted_changes ? RED BOLD "Changes" : GREEN BOLD "No Changes", RESET, RESET);
     printf("[%s%s%s] ", has_unpushed_commits ? RED BOLD "Unpushed" : GREEN BOLD "Pushed", RESET, RESET);
-    printf("[%s%s%s]\n", has_changes_to_pull ? RED BOLD "Pull" : GREEN BOLD "Up-to-date", RESET, RESET);
+    if (has_internet)
+    	printf("[%s%s%s]\n", has_changes_to_pull ? RED BOLD "Pull" : GREEN BOLD "Up-to-date", RESET, RESET);
+    else
+   		printf("[%s%s%s]\n", YELLOW BOLD, "No internet", RESET);
 
     free(cwd);
     free(current_branch);
+    free(path_with_tilde);
 }
 
 int is_git_repository(const char *path)
