@@ -14,6 +14,10 @@
 #define BOLD "\033[1m"
 #define RESET "\033[0m"
 
+#define BUFFER_SIZE 1024
+#define COMMAND_SIZE 1024
+#define PATH_SIZE 1024
+
 void* loading_animation(void* arg);
 void print_help(const char *program_name);
 char* run_command(const char* command, const char* loading_message);
@@ -28,9 +32,11 @@ char* replace_home_with_tilde(const char* path, const char* home_dir);
 void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
 void scan_directories(const char *base_path, int show_branch, int show_path);
+void print_status(const char* text, int is_warning);
+int run_git_check(const char* command, const char* loading_message);
 
 volatile int loading_done = 0;
-static int internet_status = -1; // -1 = not checked, 0 = no internet, 1 = has internet
+static int internet_status = -1;
 
 int main(int argc, char *argv[])
 {
@@ -66,8 +72,10 @@ int main(int argc, char *argv[])
                     if (realpath(optarg, resolved_path) == NULL)
                     {
                         perror("git-check");
+                        free(directory);
                         return EXIT_FAILURE;
                     }
+                    free(directory);
                     directory = strdup(resolved_path);
                 }
                 break;
@@ -81,6 +89,7 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "git-check: unexpected argument: '%s'\n", argv[optind]);
         print_help(argv[0]);
+        free(directory);
         exit(EXIT_FAILURE);
     }
 
@@ -91,6 +100,7 @@ int main(int argc, char *argv[])
 
     scan_directories(directory, show_branch, show_path);
 
+    free(directory);
     return 0;
 }
 
@@ -133,7 +143,7 @@ char* run_command(const char* command, const char* loading_message)
         return NULL;
     }
 
-    char* result = malloc(1024);
+    char* result = malloc(BUFFER_SIZE);
     if (result == NULL)
     {
         perror("malloc");
@@ -152,7 +162,7 @@ char* run_command(const char* command, const char* loading_message)
         return NULL;
     }
 
-    if (fgets(result, 1024, file_pointer) == NULL)
+    if (fgets(result, BUFFER_SIZE, file_pointer) == NULL)
     {
         result[0] = '\0';
     }
@@ -189,48 +199,59 @@ char *get_home_directory()
     return home_dir;
 }
 
+void print_status(const char* text, int is_warning)
+{
+    if (is_warning) {
+        printf("[%s%s%s] ", RED BOLD, text, RESET);
+    } else {
+        printf("[%s%s%s] ", GREEN BOLD, text, RESET);
+    }
+}
+
+int run_git_check(const char* command, const char* loading_message)
+{
+    char* result = run_command(command, loading_message);
+    int has_output = (result != NULL) && (strlen(result) > 0);
+    free(result);
+    return has_output;
+}
+
 char* get_current_branch()
 {
     char* current_branch = run_command("git rev-parse --abbrev-ref HEAD 2>/dev/null", "Getting current branch...");
-    current_branch[strcspn(current_branch, "\n")] = '\0';
+    if (current_branch != NULL) {
+        current_branch[strcspn(current_branch, "\n")] = '\0';
+    }
     return current_branch;
 }
 
 int check_uncommitted_changes()
 {
-    char* has_uncommitted_changes = run_command("git status --porcelain 2>/dev/null", "Checking for uncommitted changes...");
-    int result = strlen(has_uncommitted_changes) > 0;
-    free(has_uncommitted_changes);
-    return result;
+    return run_git_check("git status --porcelain 2>/dev/null", "Checking for uncommitted changes...");
 }
 
 int check_unpushed_commits(const char* branch)
 {
-    char command[1024];
+    char command[COMMAND_SIZE];
     snprintf(command, sizeof(command), "git log origin/%s..HEAD 2>/dev/null", branch);
-    char* has_unpushed_commits = run_command(command, "Checking for unpushed commits...");
-    int result = strlen(has_unpushed_commits) > 0;
-    free(has_unpushed_commits);
-    return result;
+    return run_git_check(command, "Checking for unpushed commits...");
 }
 
 int check_changes_to_pull(const char* branch)
 {
-    run_command("git fetch > /dev/null 2>&1", "Fetching changes from remote repository...");
-    char command[1024];
+    char* fetch_result = run_command("git fetch > /dev/null 2>&1", "Fetching changes from remote repository...");
+    free(fetch_result);
+    char command[COMMAND_SIZE];
     snprintf(command, sizeof(command), "git log HEAD..origin/%s 2>/dev/null", branch);
-    char* has_changes_to_pull = run_command(command, "Checking for changes to pull...");
-    int result = strlen(has_changes_to_pull) > 0;
-    free(has_changes_to_pull);
-    return result;
+    return run_git_check(command, "Checking for changes to pull...");
 }
 
 int check_remote_branch_exists(const char* branch)
 {
-    char command[1024];
+    char command[COMMAND_SIZE];
     snprintf(command, sizeof(command), "git ls-remote --heads origin %s > /dev/null 2>&1; echo $?", branch);
     char* result = run_command(command, "Checking if remote branch exists...");
-    int exit_code = atoi(result);
+    int exit_code = (result != NULL) ? atoi(result) : 1;
     free(result);
     return exit_code == 0;
 }
@@ -256,11 +277,13 @@ int check_internet()
 
 char* replace_home_with_tilde(const char* path, const char* home_dir)
 {
-    if (strncmp(path, home_dir, strlen(home_dir)) == 0)
+    if (home_dir != NULL && strncmp(path, home_dir, strlen(home_dir)) == 0)
     {
         size_t new_path_len = strlen(path) - strlen(home_dir) + 2;
         char* new_path = malloc(new_path_len);
-        snprintf(new_path, new_path_len, "~%s", path + strlen(home_dir));
+        if (new_path != NULL) {
+            snprintf(new_path, new_path_len, "~%s", path + strlen(home_dir));
+        }
         return new_path;
     }
     else
@@ -274,7 +297,7 @@ void display_git_status(const char* path, int show_branch, int show_path)
     char* cwd = strdup(path);
     char* folder_name = strrchr(cwd, '/') + 1;
 
-    char original_cwd[1024];
+    char original_cwd[PATH_SIZE];
     getcwd(original_cwd, sizeof(original_cwd));
 
     chdir(path);
@@ -298,12 +321,14 @@ void display_git_status(const char* path, int show_branch, int show_path)
     {
         printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
     }
-    printf("[%s%s%s] ", has_uncommitted_changes ? RED BOLD "Changes" : GREEN BOLD "No Changes", RESET, RESET);
-    printf("[%s%s%s] ", has_unpushed_commits ? RED BOLD "Unpushed" : GREEN BOLD "Pushed", RESET, RESET);
-    if (has_internet)
-    	printf("[%s%s%s]\n", has_changes_to_pull ? RED BOLD "Pull" : GREEN BOLD "Up-to-date", RESET, RESET);
-    else
-   		printf("[%s%s%s]\n", YELLOW BOLD, "No internet", RESET);
+    print_status(has_uncommitted_changes ? "Changes" : "No Changes", has_uncommitted_changes);
+    print_status(has_unpushed_commits ? "Unpushed" : "Pushed", has_unpushed_commits);
+    if (has_internet) {
+        print_status(has_changes_to_pull ? "Pull" : "Up-to-date", has_changes_to_pull);
+    } else {
+        printf("[%s%s%s]", YELLOW BOLD, "No internet", RESET);
+    }
+    printf("\n");
 
     free(cwd);
     free(current_branch);
@@ -313,7 +338,7 @@ void display_git_status(const char* path, int show_branch, int show_path)
 int is_git_repository(const char *path)
 {
     struct stat st;
-    char git_path[1024];
+    char git_path[PATH_SIZE];
 
     snprintf(git_path, sizeof(git_path), "%s/.git", path);
     if (stat(git_path, &st) == 0 && S_ISDIR(st.st_mode))
@@ -327,7 +352,7 @@ void scan_directories(const char *base_path, int show_branch, int show_path)
 {
     DIR *dir;
     struct dirent *entry;
-    char path[1024];
+    char path[PATH_SIZE];
 
     if ((dir = opendir(base_path)) == NULL)
     {
