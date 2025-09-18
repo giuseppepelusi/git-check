@@ -80,6 +80,26 @@ After installing, you can use the `git check` command as follows:
     git help check
     ```
 
+### **Output Explanation**
+
+When you run `git check`, each repository is listed with its **status** shown in three parts, each inside square brackets:
+
+1. **Local changes**
+   - `[Clean]` → No uncommitted changes (green).
+   - `[Changes]` → There are uncommitted local changes (red).
+
+2. **Local commits**
+   - `[Synced]` → All commits are pushed to the remote (green).
+   - `[Unpushed]` → There are commits that haven’t been pushed yet (red).
+
+3. **Remote status**
+   - `[Updated]` → Local repository is up to date with the remote (green).
+   - `[Behind]` → Local repository is behind the remote (red).
+   - `[No Remote]` → No remote is configured for the repository/branch (yellow).
+   - `[Offline]` → Could not reach the remote (e.g., no internet connection) (yellow).
+
+This gives you a quick, color-coded overview of your repositories so you can immediately see which ones need attention.
+
 ### **Uninstall**
 
 To uninstall **git-check**:
