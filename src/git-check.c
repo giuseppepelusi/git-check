@@ -19,6 +19,10 @@
 #define COMMAND_SIZE 1024
 #define PATH_SIZE 1024
 
+#define STATUS_SUCCESS 0
+#define STATUS_ERROR 1
+#define STATUS_WARNING 2
+
 void* loading_animation(void* arg);
 void print_help(const char *program_name);
 char* run_command(const char* command, const char* loading_message);
@@ -31,7 +35,7 @@ char* replace_home_with_tilde(const char* path, const char* home_dir);
 void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
 void scan_directories(const char *base_path, int show_branch, int show_path);
-void print_status(const char* text, int is_warning);
+void print_status(const char* text, int status_type);
 int run_git_check(const char* command, const char* loading_message);
 
 volatile int loading_done = 0;
@@ -197,10 +201,12 @@ char *get_home_directory()
     return home_dir;
 }
 
-void print_status(const char* text, int is_warning)
+void print_status(const char* text, int status_type)
 {
-    if (is_warning) {
+    if (status_type == STATUS_ERROR) {
         printf("[%s%s%s] ", RED BOLD, text, RESET);
+    } else if (status_type == STATUS_WARNING) {
+        printf("[%s%s%s] ", YELLOW BOLD, text, RESET);
     } else {
         printf("[%s%s%s] ", GREEN BOLD, text, RESET);
     }
@@ -321,20 +327,38 @@ void display_git_status(const char* path, int show_branch, int show_path)
 
     chdir(original_cwd);
 
-    printf("%s%s%s: ", BOLD, show_path ? path_with_tilde : folder_name, RESET);
-    if (show_branch)
-    {
+    if (show_path) {
+        printf("%s%s%s: ", BOLD, path_with_tilde, RESET);
+    } else {
+        printf("%s%s%s: ", BOLD, folder_name, RESET);
+    }
+    
+    if (show_branch) {
         printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
     }
-    print_status(has_uncommitted_changes ? "Changes" : "Clean", has_uncommitted_changes);
-    print_status(has_unpushed_commits ? "Unpushed" : "Synced", has_unpushed_commits);
+    
+    if (has_uncommitted_changes) {
+        print_status("Changes", STATUS_ERROR);
+    } else {
+        print_status("Clean", STATUS_SUCCESS);
+    }
+    
+    if (has_unpushed_commits) {
+        print_status("Unpushed", STATUS_ERROR);
+    } else {
+        print_status("Synced", STATUS_SUCCESS);
+    }
 
     if (has_connection && has_remote_branch) {
-        print_status(has_changes_to_pull ? "Behind" : "Updated", has_changes_to_pull);
+        if (has_changes_to_pull) {
+            print_status("Behind", STATUS_ERROR);
+        } else {
+            print_status("Updated", STATUS_SUCCESS);
+        }
     } else if (has_connection) {
-        printf("[%s%s%s] ", YELLOW BOLD, "No Remote", RESET);
+        print_status("No Remote", STATUS_WARNING);
     } else {
-        printf("[%s%s%s] ", YELLOW BOLD, "Offline", RESET);
+        print_status("Offline", STATUS_WARNING);
     }
     printf("\n");
 
