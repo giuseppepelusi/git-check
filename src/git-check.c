@@ -139,10 +139,10 @@ void* loading_animation(void* arg)
 void print_help()
 {
     fprintf(stderr, "usage: %s [<options>] [--]\n\n", PROGRAM_NAME);
-    fprintf(stderr, "    -b, --branch           show current branch\n");
-    fprintf(stderr, "    -p, --path             show full path instead of just directory name\n");
-    fprintf(stderr, "    -d, --directory <dir>  specify directory to scan (default: current directory)\n");
-    fprintf(stderr, "    -h, --help             show this help message\n");
+    fprintf(stderr, "    -b, --branch          show current branch for each repository\n");
+    fprintf(stderr, "    -p, --path            show full path instead of just directory name\n");
+    fprintf(stderr, "    -d, --directory <dir> specify directory to scan (default: current directory)\n");
+    fprintf(stderr, "    -h, --help            show this help message\n");
 }
 
 char* run_command(const char* command, const char* loading_message)
