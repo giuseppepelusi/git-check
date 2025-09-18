@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,9 +26,7 @@ char* get_home_directory();
 char* get_current_branch();
 int check_uncommitted_changes();
 int check_unpushed_commits(const char* branch);
-int check_changes_to_pull(const char* branch);
-int check_remote_branch_exists(const char* branch);
-int check_internet();
+int check_remote_status(const char* branch, int* has_changes_to_pull, int* has_remote_branch);
 char* replace_home_with_tilde(const char* path, const char* home_dir);
 void display_git_status(const char* path, int show_branch, int show_path);
 int is_git_repository(const char *path);
@@ -36,7 +35,6 @@ void print_status(const char* text, int is_warning);
 int run_git_check(const char* command, const char* loading_message);
 
 volatile int loading_done = 0;
-static int internet_status = -1;
 
 int main(int argc, char *argv[])
 {
@@ -179,7 +177,7 @@ char* run_command(const char* command, const char* loading_message)
     }
 
     printf("\r%s\r", loading_message);
-    for (int i = 0; i < strlen(loading_message) + 2; i++)
+    for (size_t i = 0; i < strlen(loading_message) + 2; i++)
     {
         printf(" ");
     }
@@ -237,42 +235,52 @@ int check_unpushed_commits(const char* branch)
     return run_git_check(command, "Checking for unpushed commits...");
 }
 
-int check_changes_to_pull(const char* branch)
+int check_remote_status(const char* branch, int* has_changes_to_pull, int* has_remote_branch)
 {
-    char* fetch_result = run_command("git fetch > /dev/null 2>&1", "Fetching changes from remote repository...");
-    free(fetch_result);
-    char command[COMMAND_SIZE];
-    snprintf(command, sizeof(command), "git log HEAD..origin/%s 2>/dev/null", branch);
-    return run_git_check(command, "Checking for changes to pull...");
-}
+    *has_changes_to_pull = 0;
+    *has_remote_branch = 0;
 
-int check_remote_branch_exists(const char* branch)
-{
     char command[COMMAND_SIZE];
-    snprintf(command, sizeof(command), "git ls-remote --heads origin %s > /dev/null 2>&1; echo $?", branch);
-    char* result = run_command(command, "Checking if remote branch exists...");
-    int exit_code = (result != NULL) ? atoi(result) : 1;
-    free(result);
-    return exit_code == 0;
-}
+    snprintf(command, sizeof(command), "git ls-remote origin %s 2>/dev/null; echo \"EXIT_CODE:$?\"", branch);
+    char* result = run_command(command, "Checking remote status...");
 
-int check_internet()
-{
-    if (internet_status == -1)
-    {
-        char* result = run_command("git ls-remote origin -q > /dev/null 2>&1; echo $?", "Checking internet connection...");
-        if (result == NULL)
-        {
-            internet_status = 0;
-        }
-        else
-        {
-            int exit_code = atoi(result);
-            free(result);
-            internet_status = (exit_code == 0) ? 1 : 0;
-        }
+    if (!result) return 0;
+
+    char* exit_code = strstr(result, "EXIT_CODE:");
+    if (exit_code && atoi(exit_code + 10) != 0) {
+        free(result);
+        return 0;
     }
-    return internet_status;
+    if (exit_code) *exit_code = '\0';
+
+    char* remote_hash = strtok(result, " \t\n");
+    if (!remote_hash) {
+        free(result);
+        return 1;
+    }
+
+    *has_remote_branch = 1;
+
+    char* local_hash = run_command("git rev-parse HEAD 2>/dev/null", "Checking local commits...");
+    if (!local_hash) {
+        free(result);
+        return 1;
+    }
+
+    local_hash[strcspn(local_hash, "\n")] = '\0';
+
+    snprintf(command, sizeof(command), "git merge-base HEAD %s 2>/dev/null", remote_hash);
+    char* merge_base = run_command(command, "Checking if behind remote...");
+
+    if (merge_base) {
+        merge_base[strcspn(merge_base, "\n")] = '\0';
+        *has_changes_to_pull = (strcmp(merge_base, local_hash) == 0 && strcmp(local_hash, remote_hash) != 0);
+        free(merge_base);
+    }
+
+    free(result);
+    free(local_hash);
+    return 1;
 }
 
 char* replace_home_with_tilde(const char* path, const char* home_dir)
@@ -306,13 +314,10 @@ void display_git_status(const char* path, int show_branch, int show_path)
     int has_uncommitted_changes = check_uncommitted_changes();
     int has_unpushed_commits = check_unpushed_commits(current_branch);
     char* path_with_tilde = replace_home_with_tilde(path, get_home_directory());
-    int has_internet = check_internet();
-    int has_changes_to_pull = 0;
 
-    if (has_internet && check_remote_branch_exists(current_branch))
-    {
-        has_changes_to_pull = check_changes_to_pull(current_branch);
-    }
+    int has_changes_to_pull = 0;
+    int has_remote_branch = 0;
+    int has_connection = check_remote_status(current_branch, &has_changes_to_pull, &has_remote_branch);
 
     chdir(original_cwd);
 
@@ -321,12 +326,15 @@ void display_git_status(const char* path, int show_branch, int show_path)
     {
         printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
     }
-    print_status(has_uncommitted_changes ? "Changes" : "No Changes", has_uncommitted_changes);
-    print_status(has_unpushed_commits ? "Unpushed" : "Pushed", has_unpushed_commits);
-    if (has_internet) {
-        print_status(has_changes_to_pull ? "Pull" : "Up-to-date", has_changes_to_pull);
+    print_status(has_uncommitted_changes ? "Changes" : "Clean", has_uncommitted_changes);
+    print_status(has_unpushed_commits ? "Unpushed" : "Synced", has_unpushed_commits);
+
+    if (has_connection && has_remote_branch) {
+        print_status(has_changes_to_pull ? "Behind" : "Updated", has_changes_to_pull);
+    } else if (has_connection) {
+        printf("[%s%s%s] ", YELLOW BOLD, "No Remote", RESET);
     } else {
-        printf("[%s%s%s]", YELLOW BOLD, "No internet", RESET);
+        printf("[%s%s%s] ", YELLOW BOLD, "Offline", RESET);
     }
     printf("\n");
 
