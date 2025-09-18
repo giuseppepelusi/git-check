@@ -1,0 +1,47 @@
+.TH GIT-CHECK 1 "September 2025" "git-check 1.0" "Git Manual"
+.SH NAME
+git-check \- Show overview of Git repositories status
+
+.SH SYNOPSIS
+\fBgit check\fR [\fB--branch\fR | \fB-b\fR] [\fB--path\fR | \fB-p\fR] [\fB--directory\fR \fI<dir>\fR | \fB-d\fR \fI<dir>\fR] [\fB--help\fR | \fB-h\fR]
+
+.SH DESCRIPTION
+\fBgit check\fR provides an overview of the status of multiple Git repositories
+within a directory. It reports for each repository whether there are local
+changes, if there are commits that have not been pushed, and whether the
+local branch is ahead or behind its remote tracking branch.
+
+If a repository has no remote or the current branch is not pushed, the
+command indicates that there is no remote. If network access is unavailable,
+the command indicates that the repository is offline.
+
+By default, \fBgit check\fR scans the current directory, but a different
+directory may be specified with the \fB--directory\fR option. The \fB--branch\fR and
+\fB--path\fR options may be used to modify the level of
+information reported.
+
+.SH OPTIONS
+.TP 4
+\fB-b, --branch\fR
+Show the current branch for each repository.
+.TP 4
+\fB-p, --path\fR
+Show the full path instead of only the directory name.
+.TP 4
+\fB-d, --directory <dir>\fR
+Specify the directory to scan (default: current directory).
+.TP 4
+\fB-h, --help\fR
+Show a summary of options.
+
+.SH EXAMPLES
+List repositories under the current directory:
+.IP
+git check
+.PP
+List repositories under a specific directory, showing branches:
+.IP
+git check -d ~/Projects -b
+
+.SH SEE ALSO
+git-status(1), git-fetch(1)
