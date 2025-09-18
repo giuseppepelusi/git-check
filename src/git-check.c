@@ -3,11 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <limits.h>
 #include <pwd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <pthread.h>
+
+#define PROGRAM_NAME "git check"
 
 #define GREEN "\033[32m"
 #define RED "\033[31m"
@@ -24,7 +27,7 @@
 #define STATUS_WARNING 2
 
 void* loading_animation(void* arg);
-void print_help(const char *program_name);
+void print_help();
 char* run_command(const char* command, const char* loading_message);
 char* get_home_directory();
 char* get_current_branch();
@@ -42,12 +45,6 @@ volatile int loading_done = 0;
 
 int main(int argc, char *argv[])
 {
-	if (argc > 1 && strcmp(argv[1], "help") == 0)
-    {
-        print_help(argv[0]);
-        exit(EXIT_SUCCESS);
-    }
-
     int opt;
     int show_branch = 0;
     int show_path = 0;
@@ -58,7 +55,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    while ((opt = getopt(argc, argv, "bpd:")) != -1)
+    static struct option long_options[] = {
+        {"branch", no_argument, 0, 'b'},
+        {"path", no_argument, 0, 'p'},
+        {"directory", required_argument, 0, 'd'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+
+    int option_index = 0;
+    while ((opt = getopt_long(argc, argv, "bpd:h", long_options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -81,8 +87,13 @@ int main(int argc, char *argv[])
                     directory = strdup(resolved_path);
                 }
                 break;
+            case 'h':
+                print_help();
+                free(directory);
+                exit(EXIT_SUCCESS);
             default:
-                print_help(argv[0]);
+                print_help();
+                free(directory);
                 exit(EXIT_FAILURE);
         }
     }
@@ -90,7 +101,7 @@ int main(int argc, char *argv[])
     if (optind < argc)
     {
         fprintf(stderr, "git-check: unexpected argument: '%s'\n", argv[optind]);
-        print_help(argv[0]);
+        print_help();
         free(directory);
         exit(EXIT_FAILURE);
     }
@@ -125,13 +136,13 @@ void* loading_animation(void* arg)
     return NULL;
 }
 
-void print_help(const char *program_name)
+void print_help()
 {
-    fprintf(stderr, "Usage: %s [-b] [-p] [-d directory]\n", program_name);
-    fprintf(stderr, "  -b            Show branches\n");
-    fprintf(stderr, "  -p            Show path instead of directory name\n");
-    fprintf(stderr, "  -d directory  Specify directory to scan\n");
-    fprintf(stderr, "  help          Show this help message\n");
+    fprintf(stderr, "usage: %s [<options>] [--]\n\n", PROGRAM_NAME);
+    fprintf(stderr, "    -b, --branch           show current branch\n");
+    fprintf(stderr, "    -p, --path             show full path instead of just directory name\n");
+    fprintf(stderr, "    -d, --directory <dir>  specify directory to scan (default: current directory)\n");
+    fprintf(stderr, "    -h, --help             show this help message\n");
 }
 
 char* run_command(const char* command, const char* loading_message)
@@ -332,17 +343,17 @@ void display_git_status(const char* path, int show_branch, int show_path)
     } else {
         printf("%s%s%s: ", BOLD, folder_name, RESET);
     }
-    
+
     if (show_branch) {
         printf("%s<%s>%s ", YELLOW BOLD, current_branch, RESET);
     }
-    
+
     if (has_uncommitted_changes) {
         print_status("Changes", STATUS_ERROR);
     } else {
         print_status("Clean", STATUS_SUCCESS);
     }
-    
+
     if (has_unpushed_commits) {
         print_status("Unpushed", STATUS_ERROR);
     } else {
