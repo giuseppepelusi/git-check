@@ -248,6 +248,18 @@ int check_uncommitted_changes()
 int check_unpushed_commits(const char* branch)
 {
     char command[COMMAND_SIZE];
+
+    snprintf(command, sizeof(command), "git show-branch remotes/origin/%s 2>/dev/null", branch);
+    int has_remote_branch = run_git_check(command, "");
+
+    if (!has_remote_branch) {
+        snprintf(command, sizeof(command), "git rev-parse --verify HEAD 2>/dev/null");
+        return run_git_check(command, "Checking for local commits...");
+    }
+
+    snprintf(command, sizeof(command), "git fetch origin %s 2>/dev/null", branch);
+    run_command(command, "Syncing with remote...");
+
     snprintf(command, sizeof(command), "git log origin/%s..HEAD 2>/dev/null", branch);
     return run_git_check(command, "Checking for unpushed commits...");
 }
