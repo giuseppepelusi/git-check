@@ -17,23 +17,23 @@ all: install
 compile: clear
 	mkdir -p bin
 	$(CC) $(SRC) -o $(EXEC)
-	echo "$(YELLOW)•$(RESET) Compiled"
+	printf "$(YELLOW)•$(RESET) Compiled\n"
 
 clear:
 	rm -rf bin
-	echo "$(YELLOW)•$(RESET) Removed executable and objects"
+	printf "$(YELLOW)•$(RESET) Removed executable and objects\n"
 
 install: compile
 	sudo cp $(EXEC) $(INSTALL_PATH)
 	sudo mkdir -p $(MAN_INSTALL_PATH)
 	sudo cp man/$(MAN) $(MAN_INSTALL_PATH)
 	sudo mandb >/dev/null 2>&1
-	echo "$(GREEN)•$(RESET) Installed \033[1;32m$(NAME)$(RESET) to $(BLUE)$(INSTALL_PATH)$(RESET)"
+	printf "$(GREEN)•$(RESET) Installed \033[1;32m$(NAME)$(RESET) to $(BLUE)$(INSTALL_PATH)$(RESET)\n"
 
 uninstall:
 	sudo rm -f $(INSTALL_PATH)/$(NAME)
 	sudo rm -f $(MAN_INSTALL_PATH)/$(MAN)
-	echo "$(RED)•$(RESET) Uninstalled \033[1;32m$(NAME)$(RESET) from $(BLUE)$(INSTALL_PATH)$(RESET)"
+	printf "$(RED)•$(RESET) Uninstalled \033[1;32m$(NAME)$(RESET) from $(BLUE)$(INSTALL_PATH)$(RESET)\n"
 
 .PHONY: all compile clear install uninstall
 .SILENT: all compile clear install uninstall
