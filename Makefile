@@ -1,6 +1,6 @@
-CC = gcc
+GO = go
 NAME = git-check
-SRC = src/$(NAME).c
+SRC = src/$(NAME).go
 EXEC = bin/$(NAME)
 INSTALL_PATH = /usr/local/bin
 MAN = $(NAME).1
@@ -16,12 +16,12 @@ all: install
 
 compile: clear
 	mkdir -p bin
-	$(CC) $(SRC) -o $(EXEC)
+	$(GO) build -o $(EXEC) $(SRC)
 	printf "$(YELLOW)•$(RESET) Compiled\n"
 
 clear:
 	rm -rf bin
-	printf "$(YELLOW)•$(RESET) Removed executable and objects\n"
+	printf "$(YELLOW)•$(RESET) Removed executable\n"
 
 install: compile
 	sudo cp $(EXEC) $(INSTALL_PATH)
