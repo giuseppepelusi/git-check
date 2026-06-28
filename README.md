@@ -58,15 +58,16 @@ After installing, you can use the `git check` command as follows:
     git check --path
     ```
 
+- **Show every repository, including fully synced ones:**
+    ```sh
+    git check -a
+    git check --all
+    ```
+
 - **Specify a different directory to start scanning from:**
     ```sh
     git check -d <directory>
     git check --directory <directory>
-    ```
-
-- **Combine multiple flags as needed:**
-    ```sh
-    git check -bpd ~/Projects
     ```
 
 - **Show the list of available commands:**
@@ -88,11 +89,13 @@ When you run `git check`, each repository is listed with its **status** shown in
    - `[Clean]` → No uncommitted changes (green).
    - `[Changes]` → There are uncommitted local changes (red).
 
-2. **Local commits**
+2. **Outgoing — local commits vs. remote**
    - `[Synced]` → All commits are pushed to the remote (green).
    - `[Unpushed]` → There are commits that haven’t been pushed yet (red).
+   - `[No Remote]` → No remote is configured for the repository/branch (yellow).
+   - `[Offline]` → Could not reach the remote (e.g., no internet connection) (yellow).
 
-3. **Remote status**
+3. **Incoming — remote commits vs. local**
    - `[Updated]` → Local repository is up to date with the remote (green).
    - `[Behind]` → Local repository is behind the remote (red).
    - `[No Remote]` → No remote is configured for the repository/branch (yellow).

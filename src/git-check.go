@@ -41,13 +41,15 @@ type RepoStatus struct {
 }
 
 func main() {
-	var showBranch, showPath, showHelp bool
+	var showBranch, showPath, showAll, showHelp bool
 	var directory string
 
 	flag.BoolVar(&showBranch, "b", false, "show current branch for each repository")
 	flag.BoolVar(&showBranch, "branch", false, "show current branch for each repository")
 	flag.BoolVar(&showPath, "p", false, "show full path instead of just directory name")
 	flag.BoolVar(&showPath, "path", false, "show full path instead of just directory name")
+	flag.BoolVar(&showAll, "a", false, "show all repositories, including fully synced ones")
+	flag.BoolVar(&showAll, "all", false, "show all repositories, including fully synced ones")
 	flag.StringVar(&directory, "d", "", "directory to scan (default: current directory)")
 	flag.StringVar(&directory, "directory", "", "directory to scan (default: current directory)")
 	flag.BoolVar(&showHelp, "h", false, "show this help message")
@@ -88,6 +90,10 @@ func main() {
 
 	for _, repo := range repos {
 		status := checkRepo(repo)
+		clean := !status.Dirty && status.FetchErr == nil && status.HasUpstream && status.Ahead == 0 && status.Behind == 0
+		if !showAll && clean {
+			continue
+		}
 		printStatus(status, showBranch, showPath, home)
 	}
 }
@@ -98,6 +104,7 @@ func printHelp() {
 	fmt.Fprintln(os.Stderr, "    -b, --branch          show current branch for each repository")
 	fmt.Fprintln(os.Stderr, "    -p, --path            show full path instead of just directory name")
 	fmt.Fprintln(os.Stderr, "    -d, --directory <dir> directory to scan (default: current directory)")
+	fmt.Fprintln(os.Stderr, "    -a, --all             show all repositories, including fully synced ones")
 	fmt.Fprintln(os.Stderr, "    -h, --help            show this help message")
 }
 

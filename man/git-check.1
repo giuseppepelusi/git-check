@@ -1,24 +1,29 @@
-.TH GIT-CHECK 1 "September 2025" "git-check 1.0" "Git Manual"
+.TH GIT-CHECK 1 "June 2026" "git-check 1.0" "Git Manual"
 .SH NAME
 git-check \- Show overview of Git repositories status
 
 .SH SYNOPSIS
-\fBgit check\fR [\fB--branch\fR | \fB-b\fR] [\fB--path\fR | \fB-p\fR] [\fB--directory\fR \fI<dir>\fR | \fB-d\fR \fI<dir>\fR] [\fB--help\fR | \fB-h\fR]
+\fBgit check\fR [\fB--branch\fR | \fB-b\fR] [\fB--path\fR | \fB-p\fR] [\fB--all\fR | \fB-a\fR] [\fB--directory\fR \fI<dir>\fR | \fB-d\fR \fI<dir>\fR] [\fB--help\fR | \fB-h\fR]
 
 .SH DESCRIPTION
 \fBgit check\fR provides an overview of the status of multiple Git repositories
-within a directory. It reports for each repository whether there are local
-changes, if there are commits that have not been pushed, and whether the
-local branch is ahead or behind its remote tracking branch.
-
-If a repository has no remote or the current branch is not pushed, the
-command indicates that there is no remote. If network access is unavailable,
-the command indicates that the repository is offline.
-
+within a directory. For each repository, it fetches from the configured
+remote and reports whether there are local changes, whether there are
+commits that have not been pushed, and whether the local branch is ahead
+or behind its remote tracking branch.
+.PP
+If a repository has no remote branch configured, the command
+indicates that there is no remote. If the remote cannot be reached (e.g.,
+no internet connection, authentication failure), the command indicates
+that the repository is offline.
+.PP
+By default, only repositories that need attention are reported; fully
+synced repositories are omitted unless \fB--all\fR is given.
+.PP
 By default, \fBgit check\fR scans the current directory, but a different
-directory may be specified with the \fB--directory\fR option. The \fB--branch\fR and
-\fB--path\fR options may be used to modify the level of
-information reported.
+directory may be specified with the \fB--directory\fR option. The \fB--branch\fR
+and \fB--path\fR options may be used to modify the level of information
+reported.
 
 .SH OPTIONS
 .TP 4
@@ -27,6 +32,9 @@ Show the current branch for each repository.
 .TP 4
 \fB-p, --path\fR
 Show the full path instead of only the directory name.
+.TP 4
+\fB-a, --all\fR
+Show all repositories, including those that are fully clean and synced.
 .TP 4
 \fB-d, --directory <dir>\fR
 Specify the directory to scan (default: current directory).
@@ -39,9 +47,8 @@ List repositories under the current directory:
 .IP
 git check
 .PP
-List repositories under a specific directory, showing branches:
+List every repository under a specific directory, showing branches:
 .IP
-git check -d ~/Projects -b
-
+git check -a -d ~/Projects -b
 .SH SEE ALSO
 git-status(1), git-fetch(1)
